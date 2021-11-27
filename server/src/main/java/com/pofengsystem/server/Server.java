@@ -1,19 +1,15 @@
 package com.pofengsystem.server;
 
-import com.google.common.primitives.Bytes;
 import com.pofengsystem.server.config.ChatConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 
 @Slf4j
@@ -27,6 +23,7 @@ public class Server {
     private String charset;
 
     public Server(ChatConfig chatConfig) {
+
         try {
             //开启未绑定的socket套接字通道
             ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
@@ -106,13 +103,14 @@ public class Server {
                 SocketChannel socketChannel = null;
                 try {
                     socketChannel = (SocketChannel) channel;
-                    log.info("转发信息给{}",socketChannel.getRemoteAddress());
+                    log.info("转发信息给{}", socketChannel.getRemoteAddress());
 
                     ByteBuffer msgByteBuffer = ByteBuffer.wrap(msg.getBytes(charset));
                     socketChannel.write(msgByteBuffer);
                 } catch (IOException e) {
                     try {
                         log.info("ip:{},下线", socketChannel.getRemoteAddress());
+                        channel.close();
                     } catch (IOException ex) {
                         ex.printStackTrace();
                     }
@@ -130,7 +128,7 @@ public class Server {
             SocketChannel socketChannel = serverSocketChannel.accept();
             socketChannel.configureBlocking(false);
             socketChannel.register(selector, SelectionKey.OP_READ);
-            ByteBuffer buffer = ByteBuffer.wrap("欢迎进入YYH聊天室".getBytes(chatConfig.getCharset()));
+            ByteBuffer buffer = ByteBuffer.wrap("欢迎进入YYH聊天室\n".getBytes(chatConfig.getCharset()));
             socketChannel.write(buffer);
         } catch (IOException e) {
             e.printStackTrace();
