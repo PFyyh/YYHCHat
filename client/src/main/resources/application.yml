@@ -1,0 +1,9 @@
+server:
+  port: 9000
+spring:
+  main:
+    web-application-type: NONE
+chat:
+  charset: GBK
+  server-port: 9000
+  sever-ip: localhost

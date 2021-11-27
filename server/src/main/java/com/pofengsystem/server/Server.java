@@ -22,11 +22,13 @@ public class Server {
 
     private String charset;
 
+    private ServerSocketChannel serverSocketChannel;
+
     public Server(ChatConfig chatConfig) {
 
         try {
             //开启未绑定的socket套接字通道
-            ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+            serverSocketChannel = ServerSocketChannel.open();
             //绑定端口
             serverSocketChannel.bind(new InetSocketAddress(chatConfig.getServerPort()));
             //设置非阻塞
@@ -39,6 +41,11 @@ public class Server {
             log.info("服务器启动成功,监听{}端口", chatConfig.getServerPort());
         } catch (IOException e) {
             e.printStackTrace();
+            try {
+                serverSocketChannel.close();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         }
         this.chatConfig = chatConfig;
     }
@@ -69,11 +76,12 @@ public class Server {
         }
     }
 
-    private void readClientInfo(SelectionKey key) {
+    private void readClientInfo(SelectionKey key) throws IOException {
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
+        SocketChannel socketChannel = null;
         try {
-            SocketChannel socketChannel = (SocketChannel) key.channel();
+            socketChannel = (SocketChannel) key.channel();
             if (socketChannel.read(buffer) > 0) {
                 buffer.flip();
 //                log.info("客户端发送消息：{}",Charset.forName(chatConfig.getCharset()).decode(buffer).toString());
@@ -84,7 +92,11 @@ public class Server {
             }
 
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(socketChannel.getRemoteAddress() + "离线了..");
+            //取消注册
+            key.cancel();
+            //关闭通道
+            socketChannel.close();
         }
     }
 
@@ -95,21 +107,23 @@ public class Server {
      * @param myself
      */
     private void forwardMessages(String msg, SocketChannel myself) {
-        log.info("开始转发。。。");
-        Set<SelectionKey> selectionKeys = selector.selectedKeys();
+        log.info("服务器转发消息中。。。");
+        //获取所有的key
+        Set<SelectionKey> selectionKeys = selector.keys();
         for (SelectionKey selectionKey : selectionKeys) {
             Channel channel = selectionKey.channel();
             if (channel instanceof SocketChannel && channel != myself) {
                 SocketChannel socketChannel = null;
                 try {
                     socketChannel = (SocketChannel) channel;
-                    log.info("转发信息给{}", socketChannel.getRemoteAddress());
+                    log.info("转发信息给{},信息内容为{}", socketChannel.getRemoteAddress(), msg);
 
                     ByteBuffer msgByteBuffer = ByteBuffer.wrap(msg.getBytes(charset));
                     socketChannel.write(msgByteBuffer);
                 } catch (IOException e) {
                     try {
                         log.info("ip:{},下线", socketChannel.getRemoteAddress());
+                        selectionKey.cancel();
                         channel.close();
                     } catch (IOException ex) {
                         ex.printStackTrace();
@@ -122,14 +136,20 @@ public class Server {
         }
     }
 
+    /**
+     * 连接信息处理
+     * @param key
+     */
     private void connectInfo(SelectionKey key) {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
         try {
+            //获取客户端通道
             SocketChannel socketChannel = serverSocketChannel.accept();
             socketChannel.configureBlocking(false);
             socketChannel.register(selector, SelectionKey.OP_READ);
             ByteBuffer buffer = ByteBuffer.wrap("欢迎进入YYH聊天室\n".getBytes(chatConfig.getCharset()));
             socketChannel.write(buffer);
+            log.info(socketChannel.getRemoteAddress() + "上线成功。");
         } catch (IOException e) {
             e.printStackTrace();
         }
